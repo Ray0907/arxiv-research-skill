@@ -1,0 +1,14 @@
+[project]
+name = "arxiv-research-skill"
+version = "0.1.0"
+description = "Agent skill for arXiv research: connect, understand, evidence"
+requires-python = ">=3.12"
+dependencies = [
+    "beautifulsoup4>=4.14.3",
+    "httpx>=0.28.1",
+]
+
+[project.scripts]
+arxiv-connect = "connect:main"
+arxiv-understand = "understand:main"
+arxiv-evidence = "evidence:main"
