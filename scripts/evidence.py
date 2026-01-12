@@ -22,6 +22,8 @@ except ImportError:
     print("Error: httpx required. Install with: pip install httpx")
     sys.exit(1)
 
+from utils import extractPaperId
+
 
 ARXIV_EXPORT = "https://export.arxiv.org"
 TIMEOUT = 30.0
@@ -39,20 +41,6 @@ class PaperMetadata:
     updated: Optional[str]
     doi: Optional[str]
     journal_ref: Optional[str]
-
-
-def extractPaperId(url_or_id: str) -> Optional[str]:
-    """Extract arXiv paper ID from URL or return ID if already in ID format."""
-    patterns = [
-        r"arxiv\.org/abs/(\d+\.\d+)",
-        r"arxiv\.org/pdf/(\d+\.\d+)",
-        r"^(\d+\.\d+)$",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, url_or_id)
-        if match:
-            return match.group(1)
-    return None
 
 
 class ArxivMetadataClient:
