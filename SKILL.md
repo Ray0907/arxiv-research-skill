@@ -38,10 +38,10 @@ connect -> understand -> evidence
 **Usage:**
 ```bash
 # Run the connect script
-python connect.py search "transformer attention mechanism" --category cs.LG --limit 20
-python connect.py similar "2301.00001" --limit 10
-python connect.py recent cs.AI --days 7
-python connect.py by-author "Yann LeCun"
+python scripts/connect.py search "transformer attention mechanism" --category cs.LG --limit 20
+python scripts/connect.py similar "2301.00001" --limit 10
+python scripts/connect.py recent cs.AI --days 7
+python scripts/connect.py by-author "Yann LeCun"
 ```
 
 ### 2. Understand (Meaning Extraction)
@@ -63,7 +63,7 @@ python connect.py by-author "Yann LeCun"
 **Usage:**
 ```bash
 # Get paper content for analysis
-python connect.py content "2301.00001"
+python scripts/connect.py content "2301.00001"
 
 # Then use the understanding prompts in your analysis
 ```
@@ -120,9 +120,9 @@ Compare these papers on:
 **Usage:**
 ```bash
 # Generate citations
-python evidence.py bibtex "2301.00001"
-python evidence.py apa "2301.00001"
-python evidence.py batch "2301.00001,2302.00002,2303.00003" --format bibtex
+python scripts/evidence.py bibtex "2301.00001"
+python scripts/evidence.py apa "2301.00001"
+python scripts/evidence.py batch "2301.00001,2302.00002,2303.00003" --format bibtex
 ```
 
 ## Workflow Examples
@@ -131,32 +131,32 @@ python evidence.py batch "2301.00001,2302.00002,2303.00003" --format bibtex
 
 ```
 1. CONNECT: Find seed papers
-   python connect.py search "your topic" --limit 50
+   python scripts/connect.py search "your topic" --limit 50
 
 2. CONNECT: Rank by impact
    (Results include citation counts from Semantic Scholar)
 
 3. CONNECT: Expand with similar papers
-   python connect.py similar "top_paper_id"
+   python scripts/connect.py similar "top_paper_id"
 
 4. UNDERSTAND: Analyze each paper
-   python connect.py content "paper_id" | analyze with prompts
+   python scripts/connect.py content "paper_id" | analyze with prompts
 
 5. EVIDENCE: Generate bibliography
-   python evidence.py batch "id1,id2,id3" --format bibtex > refs.bib
+   python scripts/evidence.py batch "id1,id2,id3" --format bibtex > refs.bib
 ```
 
 ### Finding Evidence for a Claim
 
 ```
 1. CONNECT: Search for supporting research
-   python connect.py search "your claim keywords"
+   python scripts/connect.py search "your claim keywords"
 
 2. UNDERSTAND: Verify the paper supports your claim
-   python connect.py content "paper_id"
+   python scripts/connect.py content "paper_id"
 
 3. EVIDENCE: Generate proper citation
-   python evidence.py apa "paper_id"
+   python scripts/evidence.py apa "paper_id"
 ```
 
 ## API Dependencies
@@ -171,29 +171,30 @@ python evidence.py batch "2301.00001,2302.00002,2303.00003" --format bibtex
 
 ```
 arxiv-research-skill/
-├── SKILL.md          # This file - usage guide
-├── connect.py        # Knowledge navigation
-├── understand.py     # Analysis utilities
-└── evidence.py       # Citation generation
+├── SKILL.md              # This file - usage guide
+└── scripts/
+    ├── connect.py        # Knowledge navigation
+    ├── understand.py     # Analysis utilities
+    └── evidence.py       # Citation generation
 ```
 
 ## Common Patterns
 
 ### Finding Foundational Papers
 ```bash
-python connect.py search "topic" --sort citations --limit 10
+python scripts/connect.py search "topic" --sort citations --limit 10
 ```
 
 ### Tracking Recent Developments
 ```bash
-python connect.py recent cs.AI --days 30
+python scripts/connect.py recent cs.AI --days 30
 ```
 
 ### Building a Reading List
 ```bash
-python connect.py search "topic" > papers.json
+python scripts/connect.py search "topic" > papers.json
 # Review and filter
-python evidence.py batch "selected_ids" --format bibtex
+python scripts/evidence.py batch "selected_ids" --format bibtex
 ```
 
 ## Error Handling
