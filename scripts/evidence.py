@@ -325,6 +325,51 @@ def formatAuthorChicago(name: str, first: bool = True) -> str:
     return name
 
 
+def formatRIS(paper: PaperMetadata) -> str:
+    """Generate RIS citation (for Zotero, Mendeley, EndNote)."""
+    lines = []
+    lines.append("TY  - JOUR")
+
+    # Authors (one AU line per author)
+    for author in paper.authors:
+        lines.append(f"AU  - {author}")
+
+    # Title
+    lines.append(f"TI  - {paper.title}")
+
+    # Year
+    if paper.published:
+        year_match = re.search(r"(\d{4})", paper.published)
+        if year_match:
+            lines.append(f"PY  - {year_match.group(1)}")
+
+    # Abstract
+    if paper.abstract:
+        lines.append(f"AB  - {paper.abstract}")
+
+    # URLs
+    lines.append(f"UR  - https://arxiv.org/abs/{paper.id_arxiv}")
+
+    # DOI
+    if paper.doi:
+        lines.append(f"DO  - {paper.doi}")
+
+    # Journal reference
+    if paper.journal_ref:
+        lines.append(f"JO  - {paper.journal_ref}")
+    else:
+        lines.append(f"JO  - arXiv preprint arXiv:{paper.id_arxiv}")
+
+    # Categories as keywords
+    for cat in paper.categories:
+        lines.append(f"KW  - {cat}")
+
+    # End of record
+    lines.append("ER  - ")
+
+    return "\n".join(lines)
+
+
 def formatCitation(paper: PaperMetadata, format_type: str) -> str:
     """Format citation in the specified style."""
     formatters = {
@@ -332,7 +377,8 @@ def formatCitation(paper: PaperMetadata, format_type: str) -> str:
         "apa": formatAPA,
         "ieee": formatIEEE,
         "acm": formatACM,
-        "chicago": formatChicago
+        "chicago": formatChicago,
+        "ris": formatRIS
     }
 
     formatter = formatters.get(format_type.lower())
@@ -350,8 +396,8 @@ def main():
 Examples:
   %(prog)s bibtex 2301.00001
   %(prog)s apa 2301.00001
-  %(prog)s ieee 2301.00001
-  %(prog)s batch 2301.00001,2302.00002 --format bibtex
+  %(prog)s ris 2301.00001
+  %(prog)s batch 2301.00001,2302.00002 --format ris > refs.ris
   %(prog)s all 2301.00001
         """
     )
@@ -359,14 +405,14 @@ Examples:
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # Individual format commands
-    for fmt in ["bibtex", "apa", "ieee", "acm", "chicago"]:
+    for fmt in ["bibtex", "apa", "ieee", "acm", "chicago", "ris"]:
         fmt_parser = subparsers.add_parser(fmt, help=f"Generate {fmt.upper()} citation")
         fmt_parser.add_argument("paper_id", help="arXiv paper ID or URL")
 
     # Batch command
     batch_parser = subparsers.add_parser("batch", help="Generate citations for multiple papers")
     batch_parser.add_argument("paper_ids", help="Comma-separated arXiv paper IDs")
-    batch_parser.add_argument("--format", "-f", choices=["bibtex", "apa", "ieee", "acm", "chicago"],
+    batch_parser.add_argument("--format", "-f", choices=["bibtex", "apa", "ieee", "acm", "chicago", "ris"],
                              default="bibtex", help="Citation format")
 
     # All formats command
@@ -386,7 +432,7 @@ Examples:
     client = ArxivMetadataClient()
 
     try:
-        if args.command in ["bibtex", "apa", "ieee", "acm", "chicago"]:
+        if args.command in ["bibtex", "apa", "ieee", "acm", "chicago", "ris"]:
             arxiv_id = extractPaperId(args.paper_id)
             if not arxiv_id:
                 print(f"Error: Could not parse arXiv ID from: {args.paper_id}")
@@ -424,7 +470,7 @@ Examples:
                 print(f"Error: Paper not found: {arxiv_id}")
                 sys.exit(1)
 
-            for fmt in ["bibtex", "apa", "ieee", "acm", "chicago"]:
+            for fmt in ["bibtex", "apa", "ieee", "acm", "chicago", "ris"]:
                 print(f"--- {fmt.upper()} ---")
                 print(formatCitation(paper, fmt))
                 print()

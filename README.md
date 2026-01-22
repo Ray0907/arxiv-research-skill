@@ -30,6 +30,9 @@ uv run python scripts/connect.py search "transformer attention" --limit 10
 # Search with citation counts
 uv run python scripts/connect.py search "LLM agents" --with-citations --sort citations
 
+# Search with date range
+uv run python scripts/connect.py search "LLM agents" --since 2023-01 --until 2024-06
+
 # Find similar papers
 uv run python scripts/connect.py similar 2301.00001
 
@@ -42,8 +45,12 @@ uv run python scripts/connect.py by-author "Yann LeCun"
 # Get paper details
 uv run python scripts/connect.py paper 2301.00001
 
-# Get full paper content
+# Get full paper content (single or batch)
 uv run python scripts/connect.py content 2301.00001
+uv run python scripts/connect.py content 2301.00001,2302.00002,2303.00003
+
+# Get papers that cite this paper
+uv run python scripts/connect.py cited-by 2301.00001 --limit 20
 ```
 
 ### 2. Understand (Meaning Extraction)

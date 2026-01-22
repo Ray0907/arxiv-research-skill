@@ -72,6 +72,31 @@ class ArxivClient:
             time.sleep(RATE_LIMIT_DELAY - elapsed)
         self.last_request_time = time.time()
 
+    def _parseDateToArxiv(self, date_str: str, is_start: bool = True) -> str:
+        """Convert date string to arXiv API format (YYYYMMDDTTTT).
+
+        Args:
+            date_str: Date in YYYY-MM or YYYY-MM-DD format
+            is_start: If True, use start of period; if False, use end of period
+        """
+        parts = date_str.split("-")
+        year = parts[0]
+        month = parts[1] if len(parts) > 1 else ("01" if is_start else "12")
+        day = parts[2] if len(parts) > 2 else ("01" if is_start else "31")
+
+        # Clamp day to valid range for the month
+        if not is_start and len(parts) <= 2:
+            # Last day of month approximation
+            if month in ["04", "06", "09", "11"]:
+                day = "30"
+            elif month == "02":
+                day = "28"
+            else:
+                day = "31"
+
+        time_part = "0000" if is_start else "2359"
+        return f"{year}{month}{day}{time_part}"
+
     def search(
         self,
         query: str,
@@ -79,9 +104,16 @@ class ArxivClient:
         author: Optional[str] = None,
         sort_by: str = "relevance",
         limit: int = 25,
-        page: int = 1
+        page: int = 1,
+        since: Optional[str] = None,
+        until: Optional[str] = None
     ) -> list[Paper]:
-        """Search arXiv for papers using the API."""
+        """Search arXiv for papers using the API.
+
+        Args:
+            since: Start date in YYYY-MM or YYYY-MM-DD format
+            until: End date in YYYY-MM or YYYY-MM-DD format
+        """
         self._rateLimit()
 
         max_results = min(limit, 100)
@@ -96,6 +128,12 @@ class ArxivClient:
             search_parts.append(f"au:{author}")
         if category:
             search_parts.append(f"cat:{category}")
+
+        # Date range filter
+        if since or until:
+            date_from = self._parseDateToArxiv(since, is_start=True) if since else "*"
+            date_to = self._parseDateToArxiv(until, is_start=False) if until else "*"
+            search_parts.append(f"submittedDate:[{date_from} TO {date_to}]")
 
         full_query = " AND ".join(search_parts) if search_parts else "all:*"
 
@@ -483,6 +521,105 @@ class SemanticScholarClient:
         except Exception:
             return []
 
+    def getCitedBy(self, arxiv_id: str, limit: int = 50) -> list[dict]:
+        """Get citations (papers that cite this paper)."""
+        self._rateLimit()
+
+        url = f"{SEMANTIC_SCHOLAR_API}/paper/arXiv:{arxiv_id}/citations"
+        params = {
+            "fields": "externalIds,title,authors,year,citationCount",
+            "limit": limit
+        }
+
+        try:
+            response = self.client.get(url, params=params)
+            if response.status_code == 404:
+                return []
+            response.raise_for_status()
+            data = response.json()
+            return data.get("data", [])
+        except Exception:
+            return []
+
+    def searchAuthor(self, name: str) -> Optional[dict]:
+        """Search for an author by name and return the best match."""
+        self._rateLimit()
+
+        url = f"{SEMANTIC_SCHOLAR_API}/author/search"
+        params = {"query": name, "limit": 1}
+
+        try:
+            response = self.client.get(url, params=params)
+            if response.status_code == 404:
+                return None
+            response.raise_for_status()
+            data = response.json()
+            authors = data.get("data", [])
+            return authors[0] if authors else None
+        except Exception:
+            return None
+
+    def getCoauthors(self, author_name: str, limit: int = 100) -> dict:
+        """Get coauthors for an author by analyzing their papers.
+
+        Returns dict with author info and coauthor statistics.
+        """
+        # First find the author
+        author = self.searchAuthor(author_name)
+        if not author:
+            return {"error": "Author not found"}
+
+        author_id = author.get("authorId")
+        author_name_found = author.get("name", author_name)
+
+        # Get author's papers
+        self._rateLimit()
+        url = f"{SEMANTIC_SCHOLAR_API}/author/{author_id}/papers"
+        params = {
+            "fields": "title,authors,year",
+            "limit": limit
+        }
+
+        try:
+            response = self.client.get(url, params=params)
+            if response.status_code == 404:
+                return {"error": "Could not fetch papers"}
+            response.raise_for_status()
+            data = response.json()
+            papers = data.get("data", [])
+        except Exception as e:
+            return {"error": str(e)}
+
+        # Count coauthors
+        coauthor_counts = {}
+        for paper in papers:
+            for coauthor in paper.get("authors", []):
+                coauthor_id = coauthor.get("authorId")
+                coauthor_name = coauthor.get("name", "Unknown")
+                if coauthor_id and coauthor_id != author_id:
+                    if coauthor_id not in coauthor_counts:
+                        coauthor_counts[coauthor_id] = {
+                            "name": coauthor_name,
+                            "count": 0,
+                            "papers": []
+                        }
+                    coauthor_counts[coauthor_id]["count"] += 1
+                    coauthor_counts[coauthor_id]["papers"].append(paper.get("title", ""))
+
+        # Sort by collaboration count
+        sorted_coauthors = sorted(
+            coauthor_counts.values(),
+            key=lambda x: x["count"],
+            reverse=True
+        )
+
+        return {
+            "author_id": author_id,
+            "author_name": author_name_found,
+            "total_papers": len(papers),
+            "coauthors": sorted_coauthors
+        }
+
     def close(self):
         self.client.close()
 
@@ -632,6 +769,132 @@ def formatReferences(references: list[dict], format_type: str = "json", source_i
         return json.dumps(references, indent=2, ensure_ascii=False)
 
 
+def formatCitations(citations: list[dict], format_type: str = "json", source_id: str = "") -> str:
+    """Format citations (papers that cite this paper) for output.
+
+    Supported formats: json, brief, csv, markdown
+    """
+    if format_type == "json":
+        return json.dumps(citations, indent=2, ensure_ascii=False)
+
+    elif format_type == "brief":
+        lines = []
+        for cit in citations:
+            citing_paper = cit.get("citingPaper", {})
+            title = citing_paper.get("title", "Unknown")
+            year = citing_paper.get("year", "")
+            citation_count = citing_paper.get("citationCount", 0)
+            authors = citing_paper.get("authors", [])
+            author_names = ", ".join(a.get("name", "") for a in authors[:2])
+            if len(authors) > 2:
+                author_names += " et al."
+
+            arxiv_id = ""
+            external_ids = citing_paper.get("externalIds", {})
+            if external_ids:
+                arxiv_id = external_ids.get("ArXiv", "")
+
+            id_str = f"[{arxiv_id}] " if arxiv_id else ""
+            year_str = f" ({year})" if year else ""
+            cite_str = f" [{citation_count} citations]" if citation_count else ""
+            lines.append(f"{id_str}{title}{year_str}{cite_str}")
+            if author_names:
+                lines.append(f"  {author_names}")
+            lines.append("")
+        return "\n".join(lines)
+
+    elif format_type == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["arxiv_id", "title", "authors", "year", "citation_count"])
+        for cit in citations:
+            citing_paper = cit.get("citingPaper", {})
+            external_ids = citing_paper.get("externalIds", {}) or {}
+            arxiv_id = external_ids.get("ArXiv", "")
+            title = citing_paper.get("title", "")
+            year = citing_paper.get("year", "")
+            citation_count = citing_paper.get("citationCount", "")
+            authors = citing_paper.get("authors", [])
+            author_names = "; ".join(a.get("name", "") for a in authors)
+            writer.writerow([arxiv_id, title, author_names, year or "", citation_count])
+        return output.getvalue()
+
+    elif format_type == "markdown":
+        lines = []
+        if source_id:
+            lines.append(f"## Papers citing {source_id}\n")
+        else:
+            lines.append("## Citing Papers\n")
+
+        lines.append("| # | Title | Authors | Year | Citations | arXiv ID |")
+        lines.append("|---|-------|---------|------|-----------|----------|")
+
+        for i, cit in enumerate(citations, 1):
+            citing_paper = cit.get("citingPaper", {})
+            title = citing_paper.get("title", "Unknown")
+            if len(title) > 50:
+                title = title[:50] + "..."
+            year = citing_paper.get("year", "-")
+            citation_count = citing_paper.get("citationCount", "-")
+            authors = citing_paper.get("authors", [])
+            author_names = ", ".join(a.get("name", "") for a in authors[:2])
+            if len(authors) > 2:
+                author_names += " et al."
+
+            external_ids = citing_paper.get("externalIds", {}) or {}
+            arxiv_id = external_ids.get("ArXiv", "-")
+
+            lines.append(f"| {i} | {title} | {author_names} | {year or '-'} | {citation_count} | {arxiv_id} |")
+
+        lines.append("")
+        lines.append(f"---\nGenerated: {datetime.now().strftime('%Y-%m-%d %H:%M')} | Total: {len(citations)}")
+        return "\n".join(lines)
+
+    else:
+        return json.dumps(citations, indent=2, ensure_ascii=False)
+
+
+def formatCoauthors(data: dict, format_type: str = "brief", limit: int = 20) -> str:
+    """Format coauthors data for output.
+
+    Supported formats: json, brief, markdown
+    """
+    if "error" in data:
+        return f"Error: {data['error']}"
+
+    if format_type == "json":
+        return json.dumps(data, indent=2, ensure_ascii=False)
+
+    elif format_type == "brief":
+        lines = []
+        lines.append(f"Author: {data['author_name']}")
+        lines.append(f"Total papers analyzed: {data['total_papers']}")
+        lines.append(f"\nTop coauthors:")
+        lines.append("-" * 40)
+
+        for i, coauthor in enumerate(data["coauthors"][:limit], 1):
+            lines.append(f"{i:2}. {coauthor['name']} ({coauthor['count']} papers)")
+
+        return "\n".join(lines)
+
+    elif format_type == "markdown":
+        lines = []
+        lines.append(f"## Coauthors of {data['author_name']}\n")
+        lines.append(f"Based on {data['total_papers']} papers\n")
+        lines.append("| # | Coauthor | Papers Together |")
+        lines.append("|---|----------|-----------------|")
+
+        for i, coauthor in enumerate(data["coauthors"][:limit], 1):
+            lines.append(f"| {i} | {coauthor['name']} | {coauthor['count']} |")
+
+        lines.append("")
+        lines.append(f"---\nGenerated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        return "\n".join(lines)
+
+    else:
+        return json.dumps(data, indent=2, ensure_ascii=False)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="arXiv Research - Connect: Knowledge Navigation",
@@ -639,13 +902,15 @@ def main():
         epilog="""
 Examples:
   %(prog)s search "transformer attention" --category cs.LG --limit 10
-  %(prog)s search "LLM agents" --format csv > papers.csv
+  %(prog)s search "LLM agents" --since 2023-01 --until 2024-06
   %(prog)s search "deep learning" --format markdown > papers.md
   %(prog)s similar 2301.00001 --limit 5
   %(prog)s recent cs.AI --limit 20 --format markdown
   %(prog)s references 2301.00001 --format csv
+  %(prog)s cited-by 2301.00001 --format markdown
+  %(prog)s coauthors "Yann LeCun" --limit 20
   %(prog)s paper 2301.00001
-  %(prog)s content 2301.00001
+  %(prog)s content 2301.00001,2302.00002,2303.00003
   %(prog)s by-author "Yann LeCun" --limit 10
         """
     )
@@ -662,6 +927,8 @@ Examples:
     search_parser.add_argument("--author", "-a", help="Filter by author")
     search_parser.add_argument("--limit", "-l", type=int, default=10, help="Number of results")
     search_parser.add_argument("--sort", choices=["relevance", "date_desc", "date_asc", "citations"], default="relevance")
+    search_parser.add_argument("--since", help="Start date (YYYY-MM or YYYY-MM-DD)")
+    search_parser.add_argument("--until", help="End date (YYYY-MM or YYYY-MM-DD)")
     search_parser.add_argument("--with-citations", action="store_true", help="Include citation counts")
     search_parser.add_argument("--format", "-f", choices=format_choices, default="brief")
 
@@ -684,6 +951,12 @@ Examples:
     refs_parser.add_argument("--limit", "-l", type=int, default=50, help="Number of results")
     refs_parser.add_argument("--format", "-f", choices=format_choices, default="brief")
 
+    # Cited-by command
+    cited_parser = subparsers.add_parser("cited-by", help="Get papers that cite this paper")
+    cited_parser.add_argument("paper_id", help="arXiv paper ID")
+    cited_parser.add_argument("--limit", "-l", type=int, default=50, help="Number of results")
+    cited_parser.add_argument("--format", "-f", choices=format_choices, default="brief")
+
     # Paper command
     paper_parser = subparsers.add_parser("paper", help="Get paper details")
     paper_parser.add_argument("paper_id", help="arXiv paper ID or URL")
@@ -691,7 +964,8 @@ Examples:
 
     # Content command
     content_parser = subparsers.add_parser("content", help="Get paper full text")
-    content_parser.add_argument("paper_id", help="arXiv paper ID or URL")
+    content_parser.add_argument("paper_ids", help="arXiv paper ID(s), comma-separated for batch")
+    content_parser.add_argument("--separator", default="\n\n---\n\n", help="Separator between papers in batch mode")
 
     # By-author command
     author_parser = subparsers.add_parser("by-author", help="Search by author")
@@ -699,6 +973,12 @@ Examples:
     author_parser.add_argument("--limit", "-l", type=int, default=10, help="Number of results")
     author_parser.add_argument("--with-citations", action="store_true", help="Include citation counts")
     author_parser.add_argument("--format", "-f", choices=format_choices, default="brief")
+
+    # Coauthors command
+    coauthor_parser = subparsers.add_parser("coauthors", help="Find coauthors of an author")
+    coauthor_parser.add_argument("author", help="Author name")
+    coauthor_parser.add_argument("--limit", "-l", type=int, default=20, help="Number of coauthors to show")
+    coauthor_parser.add_argument("--format", "-f", choices=["json", "brief", "markdown"], default="brief")
 
     args = parser.parse_args()
 
@@ -716,7 +996,9 @@ Examples:
                 category=args.category,
                 author=args.author,
                 sort_by=args.sort,
-                limit=args.limit
+                limit=args.limit,
+                since=args.since,
+                until=args.until
             )
             if args.with_citations or args.sort == "citations":
                 papers = semantic.enrichWithCitations(papers)
@@ -765,6 +1047,17 @@ Examples:
             else:
                 print(f"No references found for {arxiv_id}")
 
+        elif args.command == "cited-by":
+            arxiv_id = extractPaperId(args.paper_id)
+            if not arxiv_id:
+                print(f"Error: Invalid arXiv ID: {args.paper_id}")
+                sys.exit(1)
+            citations = semantic.getCitedBy(arxiv_id, args.limit)
+            if citations:
+                print(formatCitations(citations, args.format, source_id=arxiv_id))
+            else:
+                print(f"No citing papers found for {arxiv_id}")
+
         elif args.command == "paper":
             paper = arxiv.getPaper(args.paper_id)
             if paper:
@@ -775,14 +1068,29 @@ Examples:
                 print(f"Paper not found: {args.paper_id}")
 
         elif args.command == "content":
-            content = arxiv.getContent(args.paper_id)
-            print(content)
+            paper_ids = [p.strip() for p in args.paper_ids.split(",")]
+            contents = []
+            for paper_id in paper_ids:
+                arxiv_id = extractPaperId(paper_id)
+                if not arxiv_id:
+                    print(f"Warning: Invalid arXiv ID: {paper_id}", file=sys.stderr)
+                    continue
+                content = arxiv.getContent(arxiv_id)
+                if len(paper_ids) > 1:
+                    contents.append(f"# Paper: {arxiv_id}\n\n{content}")
+                else:
+                    contents.append(content)
+            print(args.separator.join(contents))
 
         elif args.command == "by-author":
             papers = arxiv.search(query="", author=args.author, limit=args.limit)
             if args.with_citations:
                 papers = semantic.enrichWithCitations(papers)
             print(formatPapers(papers, args.format, query=f"author: {args.author}"))
+
+        elif args.command == "coauthors":
+            data = semantic.getCoauthors(args.author, limit=100)
+            print(formatCoauthors(data, args.format, limit=args.limit))
 
     finally:
         arxiv.close()

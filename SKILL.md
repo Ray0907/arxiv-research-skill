@@ -39,9 +39,12 @@ connect -> understand -> evidence
 ```bash
 # Run the connect script
 python scripts/connect.py search "transformer attention mechanism" --category cs.LG --limit 20
+python scripts/connect.py search "LLM agents" --since 2023-01 --until 2024-06  # Date filtering
 python scripts/connect.py similar "2301.00001" --limit 10
 python scripts/connect.py recent cs.AI --days 7
 python scripts/connect.py by-author "Yann LeCun"
+python scripts/connect.py cited-by "2301.00001" --limit 20  # Forward citations
+python scripts/connect.py coauthors "Yann LeCun" --limit 20  # Collaboration network
 ```
 
 ### 2. Understand (Meaning Extraction)
@@ -62,8 +65,9 @@ python scripts/connect.py by-author "Yann LeCun"
 
 **Usage:**
 ```bash
-# Get paper content for analysis
+# Get paper content for analysis (single or batch)
 python scripts/connect.py content "2301.00001"
+python scripts/connect.py content "2301.00001,2302.00002,2303.00003"
 
 # Then use the understanding prompts in your analysis
 ```
@@ -113,16 +117,18 @@ Compare these papers on:
 
 **Capabilities:**
 - BibTeX generation
-- Multiple citation formats (APA, IEEE, ACM, Chicago)
+- Multiple citation formats (APA, IEEE, ACM, Chicago, RIS)
 - Batch citation export
-- Citation verification
+- RIS export for Zotero/Mendeley/EndNote
 
 **Usage:**
 ```bash
 # Generate citations
 python scripts/evidence.py bibtex "2301.00001"
 python scripts/evidence.py apa "2301.00001"
+python scripts/evidence.py ris "2301.00001"  # For Zotero/Mendeley
 python scripts/evidence.py batch "2301.00001,2302.00002,2303.00003" --format bibtex
+python scripts/evidence.py batch "2301.00001,2302.00002" --format ris > refs.ris
 ```
 
 ## Workflow Examples
