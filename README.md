@@ -51,6 +51,9 @@ uv run python scripts/connect.py content 2301.00001,2302.00002,2303.00003
 
 # Get papers that cite this paper
 uv run python scripts/connect.py cited-by 2301.00001 --limit 20
+
+# Find coauthors of an author
+uv run python scripts/connect.py coauthors "Yann LeCun" --limit 20
 ```
 
 ### 2. Understand (Meaning Extraction)
@@ -96,11 +99,15 @@ uv run python scripts/evidence.py apa 2301.00001
 # Generate IEEE citation
 uv run python scripts/evidence.py ieee 2301.00001
 
+# Generate RIS (for Zotero/Mendeley/EndNote)
+uv run python scripts/evidence.py ris 2301.00001
+
 # Generate all formats
 uv run python scripts/evidence.py all 2301.00001
 
 # Batch generate citations
 uv run python scripts/evidence.py batch "2301.00001,2302.00002,2303.00003" --format bibtex
+uv run python scripts/evidence.py batch "2301.00001,2302.00002" --format ris > refs.ris
 
 # Get raw metadata
 uv run python scripts/evidence.py metadata 2301.00001
