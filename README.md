@@ -113,6 +113,34 @@ uv run python scripts/evidence.py batch "2301.00001,2302.00002" --format ris > r
 uv run python scripts/evidence.py metadata 2301.00001
 ```
 
+### TikZ Extraction (Connect Extension)
+
+Extract TikZ source code from arXiv paper LaTeX sources.
+
+```bash
+# Extract TikZ figures (default: pure TikZ code)
+uv run python scripts/tikz.py extract 2206.00364
+
+# Output as compilable LaTeX document
+uv run python scripts/tikz.py extract 2206.00364 --format latex > figures.tex
+
+# Batch extraction as JSON
+uv run python scripts/tikz.py extract 2206.00364,2301.00001 --format json
+
+# List summary (count, types, libraries)
+uv run python scripts/tikz.py list 2206.00364
+
+# Extract + analysis prompt
+uv run python scripts/tikz.py analyze 2206.00364 quick
+
+# Pipe to understand.py
+uv run python scripts/tikz.py extract 2206.00364 --format tikz | uv run python scripts/understand.py analyze quick
+```
+
+Output formats: `tikz` (default), `json`, `latex`, `brief`
+
+Analysis prompts: `quick`, `technical`, `compare`
+
 ## Workflow Examples
 
 ### Literature Review

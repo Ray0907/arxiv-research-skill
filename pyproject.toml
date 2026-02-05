@@ -12,3 +12,4 @@ dependencies = [
 arxiv-connect = "connect:main"
 arxiv-understand = "understand:main"
 arxiv-evidence = "evidence:main"
+arxiv-tikz = "tikz:main"
