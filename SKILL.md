@@ -1,6 +1,6 @@
 ---
 name: arxiv-research
-description: Use when searching academic papers on arXiv, understanding research content, building literature reviews, or generating citations for academic writing
+description: Searches academic papers on arXiv, analyzes research content, builds literature reviews, and generates citations for academic writing. Triggers when users need to find, understand, or cite arXiv papers, extract TikZ figures from LaTeX sources, or explore citation networks and coauthor relationships.
 ---
 
 # arXiv Research Skill
@@ -14,9 +14,9 @@ connect -> understand -> evidence
   Find  ->  Comprehend -> Cite
 ```
 
-## Core Principles
+## Setup
 
-**Why this exists:** Research is reducing uncertainty about reality by building on existing knowledge. arXiv contains codified human knowledge. This skill helps navigate and utilize that knowledge effectively.
+Install dependencies: `uv sync`
 
 ## The Three Pillars
 
@@ -37,14 +37,13 @@ connect -> understand -> evidence
 
 **Usage:**
 ```bash
-# Run the connect script
-python scripts/connect.py search "transformer attention mechanism" --category cs.LG --limit 20
-python scripts/connect.py search "LLM agents" --since 2023-01 --until 2024-06  # Date filtering
-python scripts/connect.py similar "2301.00001" --limit 10
-python scripts/connect.py recent cs.AI --days 7
-python scripts/connect.py by-author "Yann LeCun"
-python scripts/connect.py cited-by "2301.00001" --limit 20  # Forward citations
-python scripts/connect.py coauthors "Yann LeCun" --limit 20  # Collaboration network
+uv run python scripts/connect.py search "transformer attention mechanism" --category cs.LG --limit 20
+uv run python scripts/connect.py search "LLM agents" --since 2023-01 --until 2024-06  # Date filtering
+uv run python scripts/connect.py similar "2301.00001" --limit 10
+uv run python scripts/connect.py recent cs.AI --days 7
+uv run python scripts/connect.py by-author "Yann LeCun"
+uv run python scripts/connect.py cited-by "2301.00001" --limit 20  # Forward citations
+uv run python scripts/connect.py coauthors "Yann LeCun" --limit 20  # Collaboration network
 ```
 
 ### 2. Understand (Meaning Extraction)
@@ -66,44 +65,16 @@ python scripts/connect.py coauthors "Yann LeCun" --limit 20  # Collaboration net
 **Usage:**
 ```bash
 # Get paper content for analysis (single or batch)
-python scripts/connect.py content "2301.00001"
-python scripts/connect.py content "2301.00001,2302.00002,2303.00003"
+uv run python scripts/connect.py content "2301.00001"
+uv run python scripts/connect.py content "2301.00001,2302.00002,2303.00003"
 
-# Then use the understanding prompts in your analysis
-```
-
-**Analysis Prompts** (use with paper content):
-
-#### Quick Summary
-```
-Analyze this paper and provide:
-1. Problem: What problem does it solve? (1-2 sentences)
-2. Method: How does it solve it? (2-3 sentences)
-3. Contribution: What's new/novel? (1-2 sentences)
-4. Limitation: What are the limitations? (1-2 sentences)
+# Pipe content into analysis prompts
+uv run python scripts/connect.py content "2301.00001" | uv run python scripts/understand.py analyze quick
 ```
 
-#### Deep Methodology
-```
-Extract the methodology:
-1. Core algorithm/approach
-2. Key assumptions
-3. Experimental setup
-4. Evaluation metrics
-5. Baseline comparisons
-```
+**Available prompts:** `uv run python scripts/understand.py list`
 
-#### Literature Comparison
-```
-Compare these papers on:
-| Aspect | Paper A | Paper B | Paper C |
-|--------|---------|---------|---------|
-| Problem |
-| Method |
-| Dataset |
-| Results |
-| Limitations |
-```
+Prompts: `quick`, `methodology`, `contribution`, `critical`, `compare`, `literature`, `implementation`, `evidence`
 
 ### 3. Evidence (Source Attribution)
 
@@ -123,12 +94,34 @@ Compare these papers on:
 
 **Usage:**
 ```bash
-# Generate citations
-python scripts/evidence.py bibtex "2301.00001"
-python scripts/evidence.py apa "2301.00001"
-python scripts/evidence.py ris "2301.00001"  # For Zotero/Mendeley
-python scripts/evidence.py batch "2301.00001,2302.00002,2303.00003" --format bibtex
-python scripts/evidence.py batch "2301.00001,2302.00002" --format ris > refs.ris
+uv run python scripts/evidence.py bibtex "2301.00001"
+uv run python scripts/evidence.py apa "2301.00001"
+uv run python scripts/evidence.py ris "2301.00001"  # For Zotero/Mendeley
+uv run python scripts/evidence.py batch "2301.00001,2302.00002,2303.00003" --format bibtex
+uv run python scripts/evidence.py batch "2301.00001,2302.00002" --format ris > refs.ris
+```
+
+### 4. TikZ (Figure Extraction)
+
+**Purpose:** Extract TikZ source code from arXiv paper LaTeX sources
+
+**When to use:**
+- Reusing or adapting figures from papers
+- Analyzing visualization techniques
+- Understanding diagram construction
+
+**Capabilities:**
+- Extracts tikzpicture, tikzcd, circuitikz, pgfplots environments
+- Captures captions, labels, and library dependencies
+- Outputs as pure TikZ, compilable LaTeX, JSON, or brief summary
+
+**Usage:**
+```bash
+uv run python scripts/tikz.py extract "2301.00001"
+uv run python scripts/tikz.py extract "2301.00001" --format latex > figures.tex
+uv run python scripts/tikz.py extract "2301.00001,2302.00002" --format json
+uv run python scripts/tikz.py list "2301.00001"
+uv run python scripts/tikz.py extract "2301.00001" --format tikz | uv run python scripts/understand.py analyze quick
 ```
 
 ## Workflow Examples
@@ -136,33 +129,38 @@ python scripts/evidence.py batch "2301.00001,2302.00002" --format ris > refs.ris
 ### Literature Review Workflow
 
 ```
-1. CONNECT: Find seed papers
-   python scripts/connect.py search "your topic" --limit 50
+Progress:
+- [ ] Step 1: Find seed papers
+- [ ] Step 2: Expand with similar papers
+- [ ] Step 3: Analyze each paper
+- [ ] Step 4: Generate bibliography
+```
 
-2. CONNECT: Rank by impact
-   (Results include citation counts from Semantic Scholar)
+```bash
+# Step 1: Find seed papers (ranked by citation impact)
+uv run python scripts/connect.py search "your topic" --limit 50 --with-citations --sort citations
 
-3. CONNECT: Expand with similar papers
-   python scripts/connect.py similar "top_paper_id"
+# Step 2: Expand with similar papers from top results
+uv run python scripts/connect.py similar "top_paper_id"
 
-4. UNDERSTAND: Analyze each paper
-   python scripts/connect.py content "paper_id" | analyze with prompts
+# Step 3: Analyze each paper
+uv run python scripts/connect.py content "paper_id" | uv run python scripts/understand.py analyze literature
 
-5. EVIDENCE: Generate bibliography
-   python scripts/evidence.py batch "id1,id2,id3" --format bibtex > refs.bib
+# Step 4: Generate bibliography
+uv run python scripts/evidence.py batch "id1,id2,id3" --format bibtex > refs.bib
 ```
 
 ### Finding Evidence for a Claim
 
-```
-1. CONNECT: Search for supporting research
-   python scripts/connect.py search "your claim keywords"
+```bash
+# 1. Search for supporting research
+uv run python scripts/connect.py search "your claim keywords" --with-citations
 
-2. UNDERSTAND: Verify the paper supports your claim
-   python scripts/connect.py content "paper_id"
+# 2. Verify the paper supports your claim
+uv run python scripts/connect.py content "paper_id" | uv run python scripts/understand.py analyze evidence
 
-3. EVIDENCE: Generate proper citation
-   python scripts/evidence.py apa "paper_id"
+# 3. Generate proper citation
+uv run python scripts/evidence.py apa "paper_id"
 ```
 
 ## API Dependencies
@@ -180,27 +178,30 @@ arxiv-research-skill/
 ├── SKILL.md              # This file - usage guide
 └── scripts/
     ├── connect.py        # Knowledge navigation
-    ├── understand.py     # Analysis utilities
-    └── evidence.py       # Citation generation
+    ├── understand.py     # Analysis prompts
+    ├── evidence.py       # Citation generation
+    ├── tikz.py           # TikZ figure extraction
+    ├── cache.py          # SQLite caching (~/.cache/arxiv-research/papers.db)
+    └── utils.py          # Shared utilities (extractPaperId, cleanText)
 ```
 
 ## Common Patterns
 
 ### Finding Foundational Papers
 ```bash
-python scripts/connect.py search "topic" --sort citations --limit 10
+uv run python scripts/connect.py search "topic" --sort citations --limit 10
 ```
 
 ### Tracking Recent Developments
 ```bash
-python scripts/connect.py recent cs.AI --days 30
+uv run python scripts/connect.py recent cs.AI --days 30
 ```
 
 ### Building a Reading List
 ```bash
-python scripts/connect.py search "topic" > papers.json
+uv run python scripts/connect.py search "topic" > papers.json
 # Review and filter
-python scripts/evidence.py batch "selected_ids" --format bibtex
+uv run python scripts/evidence.py batch "selected_ids" --format bibtex
 ```
 
 ## Error Handling
