@@ -13,6 +13,16 @@ connect -> understand -> evidence
 
 ## Installation
 
+### As an Agent Skill (via [Vercel Skills](https://vercel.com/docs/agent-resources/skills))
+
+```bash
+npx skills add Ray0907/arxiv-research-skill
+```
+
+This installs the skill for your coding agent (Claude Code, Cursor, Copilot, etc.).
+
+### Manual Setup
+
 ```bash
 uv sync
 ```
