@@ -1,6 +1,10 @@
 ---
 name: arxiv-research
 description: Searches academic papers on arXiv, analyzes research content, builds literature reviews, and generates citations for academic writing. Triggers when users need to find, understand, or cite arXiv papers, extract TikZ figures from LaTeX sources, or explore citation networks and coauthor relationships.
+license: MIT
+metadata:
+  author: Ray0907
+  version: "0.1.0"
 ---
 
 # arXiv Research Skill
