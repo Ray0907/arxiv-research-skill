@@ -99,36 +99,7 @@ Output formats: `tikz` (default), `latex`, `json`, `brief`
 
 ## Workflow Patterns
 
-### Literature Review
-
-```bash
-# 1. Find seed papers ranked by citation impact
-uv run python scripts/connect.py search "your topic" --limit 50 --with-citations --sort citations
-
-# 2. Expand with similar papers from top results
-uv run python scripts/connect.py similar "top_paper_id"
-
-# 3. Analyze each paper for the review
-uv run python scripts/connect.py content "paper_id" | uv run python scripts/understand.py analyze literature
-
-# 4. Generate bibliography
-uv run python scripts/evidence.py batch "id1,id2,id3" --format bibtex > refs.bib
-```
-
-### Finding Evidence for a Claim
-
-```bash
-# 1. Search for supporting research
-uv run python scripts/connect.py search "your claim keywords" --with-citations
-
-# 2. Verify the paper supports your claim
-uv run python scripts/connect.py content "paper_id" | uv run python scripts/understand.py analyze evidence
-
-# 3. Generate proper citation
-uv run python scripts/evidence.py apa "paper_id"
-```
-
----
+Multi-step recipes (literature review, finding evidence for a claim): see `references/workflows.md`.
 
 ## API Dependencies
 
@@ -138,11 +109,12 @@ uv run python scripts/evidence.py apa "paper_id"
 | Semantic Scholar | Citations, similar papers | 100 req/5min | Optional (higher limits) |
 | Jina Reader | Full text extraction | Generous | No |
 
-Scripts include built-in rate limiting and backoff.
+Scripts enforce a fixed delay between requests per service. There is no automatic retry
+on failure — a 429 or network error returns an empty result rather than retrying.
 
 ## Error Handling
 
-- **Rate limited**: Scripts retry automatically with backoff
+- **Rate limited**: Requests will fail with an empty result, not retry; wait and re-run
 - **Paper not found**: Verify arXiv ID format (YYMM.NNNNN)
 - **No citations**: Paper may be too new for Semantic Scholar
 
@@ -152,6 +124,8 @@ Scripts include built-in rate limiting and backoff.
 arxiv-research-skill/
 ├── SKILL.md              # Agent instructions
 ├── README.md             # Installation and overview
+├── references/
+│   └── workflows.md      # Multi-step workflow recipes
 └── scripts/
     ├── connect.py        # Knowledge navigation
     ├── understand.py     # Analysis prompts

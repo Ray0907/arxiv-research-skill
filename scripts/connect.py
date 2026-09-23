@@ -30,8 +30,8 @@ except ImportError:
     print("Error: beautifulsoup4 required. Install with: pip install beautifulsoup4")
     sys.exit(1)
 
-from utils import extractPaperId, cleanText
-from cache import PaperCache, CachedPaper, CachedReference
+from utils import extractPaperId, cleanText, ARXIV_RATE_LIMIT_DELAY, SEMANTIC_SCHOLAR_RATE_LIMIT_DELAY
+from cache import PaperCache, CachedPaper
 
 
 # Configuration
@@ -40,7 +40,6 @@ ARXIV_EXPORT = "https://export.arxiv.org"
 SEMANTIC_SCHOLAR_API = "https://api.semanticscholar.org/graph/v1"
 JINA_READER = "https://r.jina.ai"
 TIMEOUT = 30.0
-RATE_LIMIT_DELAY = 1.0  # seconds between requests
 
 
 @dataclass
@@ -61,15 +60,16 @@ class Paper:
 class ArxivClient:
     """Client for arXiv operations."""
 
-    def __init__(self):
+    def __init__(self, cache: Optional[PaperCache] = None):
         self.client = httpx.Client(timeout=TIMEOUT, follow_redirects=True)
         self.last_request_time = 0
+        self.cache = cache
 
     def _rateLimit(self):
         """Ensure rate limiting between requests."""
         elapsed = time.time() - self.last_request_time
-        if elapsed < RATE_LIMIT_DELAY:
-            time.sleep(RATE_LIMIT_DELAY - elapsed)
+        if elapsed < ARXIV_RATE_LIMIT_DELAY:
+            time.sleep(ARXIV_RATE_LIMIT_DELAY - elapsed)
         self.last_request_time = time.time()
 
     def _parseDateToArxiv(self, date_str: str, is_start: bool = True) -> str:
@@ -159,70 +159,6 @@ class ArxivClient:
 
         return self._parseApiResults(response.text)
 
-    def _parseSearchResults(self, html: str) -> list[Paper]:
-        """Parse arXiv search results HTML."""
-        soup = BeautifulSoup(html, "html.parser")
-        items = soup.select(".arxiv-result")
-
-        papers = []
-        for item in items:
-            try:
-                # Extract title
-                title_elem = item.select_one(".title")
-                title = cleanText(title_elem.text) if title_elem else "Unknown Title"
-
-                # Extract abstract
-                abstract_elem = item.select_one(".abstract-full")
-                if not abstract_elem:
-                    abstract_elem = item.select_one(".abstract")
-                abstract = cleanText(abstract_elem.text) if abstract_elem else ""
-                abstract = re.sub(r"\s*(Less|More)\s*$", "", abstract)
-                abstract = re.sub(r"^Abstract:\s*", "", abstract)
-
-                # Extract URL and ID
-                url_elem = item.select_one(".list-title > span > a")
-                url_abstract = url_elem.get("href") if url_elem else ""
-                id_arxiv = extractPaperId(url_abstract) or ""
-
-                # Extract authors
-                authors = []
-                authors_elem = item.select(".authors a")
-                for author in authors_elem:
-                    authors.append(author.text.strip())
-
-                # Extract categories
-                categories = []
-                tags = item.select(".tag.is-small")
-                for tag in tags:
-                    cat_text = tag.text.strip()
-                    if cat_text and not cat_text.startswith("doi:"):
-                        categories.append(cat_text)
-
-                # Extract dates
-                date_elem = item.select_one(".is-size-7")
-                date_published = None
-                if date_elem:
-                    date_text = date_elem.text
-                    submitted_match = re.search(r"Submitted\s+(\d+\s+\w+,?\s+\d+)", date_text)
-                    if submitted_match:
-                        date_published = submitted_match.group(1)
-
-                paper = Paper(
-                    id_arxiv=id_arxiv,
-                    title=title,
-                    abstract=abstract,
-                    authors=authors,
-                    categories=categories,
-                    url_abstract=url_abstract,
-                    url_pdf=f"https://arxiv.org/pdf/{id_arxiv}.pdf" if id_arxiv else "",
-                    date_published=date_published,
-                )
-                papers.append(paper)
-            except Exception:
-                continue
-
-        return papers
-
     def _parseApiResults(self, xml_content: str) -> list[Paper]:
         """Parse arXiv API Atom feed results."""
         from xml.etree import ElementTree
@@ -294,59 +230,50 @@ class ArxivClient:
         return papers
 
     def getPaper(self, id_or_url: str) -> Optional[Paper]:
-        """Get detailed information about a specific paper."""
-        self._rateLimit()
-
+        """Get detailed information about a specific paper. Metadata never expires, so
+        cache hits skip the network entirely."""
         id_arxiv = extractPaperId(id_or_url)
         if not id_arxiv:
             return None
 
-        url_abstract = f"{ARXIV_BASE}/abs/{id_arxiv}"
-        response = self.client.get(url_abstract)
+        if self.cache:
+            cached = self.cache.getPaper(id_arxiv)
+            if cached:
+                return Paper(
+                    id_arxiv=cached.id_arxiv,
+                    title=cached.title,
+                    abstract=cached.abstract,
+                    authors=cached.authors,
+                    categories=cached.categories,
+                    url_abstract=cached.url_abstract,
+                    url_pdf=cached.url_pdf,
+                    date_published=cached.date_published,
+                )
+
+        self._rateLimit()
+
+        url = f"{ARXIV_EXPORT}/api/query?id_list={id_arxiv}"
+        response = self.client.get(url)
         response.raise_for_status()
 
-        soup = BeautifulSoup(response.text, "html.parser")
+        papers = self._parseApiResults(response.text)
+        if not papers:
+            return None
+        paper = papers[0]
 
-        # Extract title
-        title_elem = soup.select_one(".title.mathjax")
-        title = cleanText(title_elem.text.replace("Title:", "")) if title_elem else "Unknown"
+        if self.cache:
+            self.cache.savePaper(CachedPaper(
+                id_arxiv=paper.id_arxiv,
+                title=paper.title,
+                abstract=paper.abstract,
+                authors=paper.authors,
+                categories=paper.categories,
+                url_abstract=paper.url_abstract,
+                url_pdf=paper.url_pdf,
+                date_published=paper.date_published,
+            ))
 
-        # Extract abstract
-        abstract_elem = soup.select_one(".abstract.mathjax")
-        abstract = cleanText(abstract_elem.text.replace("Abstract:", "")) if abstract_elem else ""
-
-        # Extract authors
-        authors = []
-        authors_div = soup.select_one(".authors")
-        if authors_div:
-            for a in authors_div.select("a"):
-                authors.append(a.text.strip())
-
-        # Extract categories
-        categories = []
-        subj_elem = soup.select_one(".tablecell.subjects")
-        if subj_elem:
-            cat_matches = re.findall(r"\(([a-z-]+\.[A-Z]+)\)", subj_elem.text)
-            categories = list(set(cat_matches))
-
-        # Extract dates
-        date_submitted = None
-        date_history = soup.select_one(".dateline")
-        if date_history:
-            date_match = re.search(r"Submitted.*?(\d+\s+\w+\s+\d+)", date_history.text)
-            if date_match:
-                date_submitted = date_match.group(1)
-
-        return Paper(
-            id_arxiv=id_arxiv,
-            title=title,
-            abstract=abstract,
-            authors=authors,
-            categories=categories,
-            url_abstract=url_abstract,
-            url_pdf=f"{ARXIV_BASE}/pdf/{id_arxiv}.pdf",
-            date_published=date_submitted,
-        )
+        return paper
 
     def getRecent(self, category: str = "cs.AI", count: int = 10) -> list[Paper]:
         """Get recent papers from a category."""
@@ -437,7 +364,7 @@ class ArxivClient:
 class SemanticScholarClient:
     """Client for Semantic Scholar API operations."""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, cache: Optional[PaperCache] = None):
         headers = {}
         if api_key:
             headers["x-api-key"] = api_key
@@ -447,16 +374,25 @@ class SemanticScholarClient:
             follow_redirects=True
         )
         self.last_request_time = 0
+        self.cache = cache
 
     def _rateLimit(self):
         """Ensure rate limiting."""
         elapsed = time.time() - self.last_request_time
-        if elapsed < 0.5:  # 100 requests per 5 minutes = ~0.5s between requests
-            time.sleep(0.5 - elapsed)
+        if elapsed < SEMANTIC_SCHOLAR_RATE_LIMIT_DELAY:
+            time.sleep(SEMANTIC_SCHOLAR_RATE_LIMIT_DELAY - elapsed)
         self.last_request_time = time.time()
 
     def getCitations(self, arxiv_id: str) -> dict:
-        """Get citation data for an arXiv paper."""
+        """Get citation data for an arXiv paper. Cached for CITATION_TTL_DAYS."""
+        if self.cache:
+            cached = self.cache.getCitations(arxiv_id)
+            if cached:
+                return {
+                    "citationCount": cached["citation_count"],
+                    "influentialCitationCount": cached["influential_count"],
+                }
+
         self._rateLimit()
 
         url = f"{SEMANTIC_SCHOLAR_API}/paper/arXiv:{arxiv_id}"
@@ -467,9 +403,22 @@ class SemanticScholarClient:
             if response.status_code == 404:
                 return {}
             response.raise_for_status()
-            return response.json()
-        except Exception:
+            data = response.json()
+        except httpx.HTTPStatusError as e:
+            print(f"Warning: Semantic Scholar request failed ({e.response.status_code}): {url}", file=sys.stderr)
             return {}
+        except httpx.HTTPError as e:
+            print(f"Warning: Semantic Scholar request error: {e}", file=sys.stderr)
+            return {}
+
+        if self.cache and "citationCount" in data:
+            self.cache.saveCitations(
+                arxiv_id,
+                data.get("citationCount") or 0,
+                data.get("influentialCitationCount") or 0,
+            )
+
+        return data
 
     def getSimilar(self, arxiv_id: str, limit: int = 10) -> list[dict]:
         """Get similar papers based on an arXiv paper."""
@@ -488,17 +437,68 @@ class SemanticScholarClient:
             response.raise_for_status()
             data = response.json()
             return data.get("recommendedPapers", [])
-        except Exception:
+        except httpx.HTTPStatusError as e:
+            print(f"Warning: Semantic Scholar request failed ({e.response.status_code}): {url}", file=sys.stderr)
+            return []
+        except httpx.HTTPError as e:
+            print(f"Warning: Semantic Scholar request error: {e}", file=sys.stderr)
             return []
 
     def enrichWithCitations(self, papers: list[Paper]) -> list[Paper]:
-        """Add citation data to a list of papers."""
+        """Add citation data to a list of papers.
+
+        Cache hits are applied directly; remaining papers are fetched in a single
+        batch request instead of one request per paper.
+        """
+        to_fetch = []
         for paper in papers:
-            if paper.id_arxiv:
-                citation_data = self.getCitations(paper.id_arxiv)
-                if citation_data:
-                    paper.citation_count = citation_data.get("citationCount")
-                    paper.influential_citation_count = citation_data.get("influentialCitationCount")
+            if not paper.id_arxiv:
+                continue
+            cached = self.cache.getCitations(paper.id_arxiv) if self.cache else None
+            if cached:
+                paper.citation_count = cached["citation_count"]
+                paper.influential_citation_count = cached["influential_count"]
+            else:
+                to_fetch.append(paper)
+
+        if not to_fetch:
+            return papers
+
+        self._rateLimit()
+        url = f"{SEMANTIC_SCHOLAR_API}/paper/batch"
+        params = {"fields": "externalIds,citationCount,influentialCitationCount"}
+        body = {"ids": [f"ARXIV:{p.id_arxiv}" for p in to_fetch]}
+
+        try:
+            response = self.client.post(url, params=params, json=body)
+            response.raise_for_status()
+            results = response.json()
+        except httpx.HTTPStatusError as e:
+            print(f"Warning: Semantic Scholar batch request failed ({e.response.status_code}): {url}", file=sys.stderr)
+            return papers
+        except httpx.HTTPError as e:
+            print(f"Warning: Semantic Scholar batch request error: {e}", file=sys.stderr)
+            return papers
+
+        by_arxiv_id = {}
+        for entry in results:
+            if not entry:
+                continue
+            arxiv_id = (entry.get("externalIds") or {}).get("ArXiv")
+            if arxiv_id:
+                by_arxiv_id[arxiv_id] = entry
+
+        for paper in to_fetch:
+            entry = by_arxiv_id.get(paper.id_arxiv)
+            if not entry:
+                continue
+            citation_count = entry.get("citationCount") or 0
+            influential_count = entry.get("influentialCitationCount") or 0
+            paper.citation_count = citation_count
+            paper.influential_citation_count = influential_count
+            if self.cache:
+                self.cache.saveCitations(paper.id_arxiv, citation_count, influential_count)
+
         return papers
 
     def getReferences(self, arxiv_id: str, limit: int = 50) -> list[dict]:
@@ -518,7 +518,11 @@ class SemanticScholarClient:
             response.raise_for_status()
             data = response.json()
             return data.get("data", [])
-        except Exception:
+        except httpx.HTTPStatusError as e:
+            print(f"Warning: Semantic Scholar request failed ({e.response.status_code}): {url}", file=sys.stderr)
+            return []
+        except httpx.HTTPError as e:
+            print(f"Warning: Semantic Scholar request error: {e}", file=sys.stderr)
             return []
 
     def getCitedBy(self, arxiv_id: str, limit: int = 50) -> list[dict]:
@@ -538,7 +542,11 @@ class SemanticScholarClient:
             response.raise_for_status()
             data = response.json()
             return data.get("data", [])
-        except Exception:
+        except httpx.HTTPStatusError as e:
+            print(f"Warning: Semantic Scholar request failed ({e.response.status_code}): {url}", file=sys.stderr)
+            return []
+        except httpx.HTTPError as e:
+            print(f"Warning: Semantic Scholar request error: {e}", file=sys.stderr)
             return []
 
     def searchAuthor(self, name: str) -> Optional[dict]:
@@ -556,7 +564,11 @@ class SemanticScholarClient:
             data = response.json()
             authors = data.get("data", [])
             return authors[0] if authors else None
-        except Exception:
+        except httpx.HTTPStatusError as e:
+            print(f"Warning: Semantic Scholar request failed ({e.response.status_code}): {url}", file=sys.stderr)
+            return None
+        except httpx.HTTPError as e:
+            print(f"Warning: Semantic Scholar request error: {e}", file=sys.stderr)
             return None
 
     def getCoauthors(self, author_name: str, limit: int = 100) -> dict:
@@ -986,8 +998,9 @@ Examples:
         parser.print_help()
         sys.exit(1)
 
-    arxiv = ArxivClient()
-    semantic = SemanticScholarClient()
+    cache = PaperCache()
+    arxiv = ArxivClient(cache=cache)
+    semantic = SemanticScholarClient(cache=cache)
 
     try:
         if args.command == "search":

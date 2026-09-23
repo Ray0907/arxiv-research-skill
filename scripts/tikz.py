@@ -27,13 +27,12 @@ except ImportError:
     print("Error: httpx required. Install with: pip install httpx")
     sys.exit(1)
 
-from utils import extractPaperId
+from utils import extractPaperId, ARXIV_RATE_LIMIT_DELAY
 
 
 # Configuration
 ARXIV_BASE = "https://arxiv.org"
 TIMEOUT = 60.0
-RATE_LIMIT_DELAY = 3.0  # arXiv asks for 1 request per 3 seconds
 
 # TikZ environments to extract
 TIKZ_ENVIRONMENTS = ["tikzpicture", "tikzcd", "circuitikz", "axis"]
@@ -70,8 +69,8 @@ class TikzClient:
     def _rateLimit(self):
         """Ensure rate limiting between requests."""
         elapsed = time.time() - self.last_request_time
-        if elapsed < RATE_LIMIT_DELAY:
-            time.sleep(RATE_LIMIT_DELAY - elapsed)
+        if elapsed < ARXIV_RATE_LIMIT_DELAY:
+            time.sleep(ARXIV_RATE_LIMIT_DELAY - elapsed)
         self.last_request_time = time.time()
 
     def extractFigures(self, arxiv_id: str) -> list[TikzFigure]:

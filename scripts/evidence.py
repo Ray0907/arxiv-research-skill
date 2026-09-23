@@ -22,7 +22,7 @@ except ImportError:
     print("Error: httpx required. Install with: pip install httpx")
     sys.exit(1)
 
-from utils import extractPaperId
+from utils import extractPaperId, ARXIV_RATE_LIMIT_DELAY
 
 
 ARXIV_EXPORT = "https://export.arxiv.org"
@@ -51,10 +51,10 @@ class ArxivMetadataClient:
         self.last_request_time = 0
 
     def _rateLimit(self):
-        """Ensure rate limiting (arXiv asks for 1 request per 3 seconds)."""
+        """Ensure rate limiting."""
         elapsed = time.time() - self.last_request_time
-        if elapsed < 3.0:
-            time.sleep(3.0 - elapsed)
+        if elapsed < ARXIV_RATE_LIMIT_DELAY:
+            time.sleep(ARXIV_RATE_LIMIT_DELAY - elapsed)
         self.last_request_time = time.time()
 
     def getMetadata(self, arxiv_id: str) -> Optional[PaperMetadata]:
