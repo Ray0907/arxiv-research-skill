@@ -21,6 +21,10 @@ connect -> understand -> evidence
 
 Install dependencies: `uv sync`
 
+If an `arxiv` MCP server ([Ray0907/arXiv-mcp](https://github.com/Ray0907/arXiv-mcp)) is already configured, prefer its
+`search`, `search_advanced`, `get_paper`, `get_recent` and `get_content` tools for plain lookups. Use these scripts for
+citation networks, coauthors, structured analysis prompts, citation formats and TikZ extraction, which the server does not provide.
+
 ## Capabilities
 
 ### Connect (Knowledge Navigation)
