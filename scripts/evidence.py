@@ -22,7 +22,7 @@ except ImportError:
     print("Error: httpx required. Install with: pip install httpx")
     sys.exit(1)
 
-from utils import extractPaperId, ARXIV_RATE_LIMIT_DELAY
+from utils import extractPaperId, ARXIV_RATE_LIMIT_DELAY, ARXIV_USER_AGENT
 
 
 ARXIV_EXPORT = "https://export.arxiv.org"
@@ -47,7 +47,11 @@ class ArxivMetadataClient:
     """Client for fetching arXiv metadata via API."""
 
     def __init__(self):
-        self.client = httpx.Client(timeout=TIMEOUT, follow_redirects=True)
+        self.client = httpx.Client(
+            timeout=TIMEOUT,
+            headers={"User-Agent": ARXIV_USER_AGENT},
+            follow_redirects=True,
+        )
         self.last_request_time = 0
 
     def _rateLimit(self):
