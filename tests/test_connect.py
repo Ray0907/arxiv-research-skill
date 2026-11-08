@@ -1,4 +1,3 @@
-import pytest
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -7,7 +6,6 @@ from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-import connect
 import evidence
 import tikz
 from connect import ArxivClient
