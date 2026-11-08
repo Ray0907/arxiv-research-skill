@@ -4,7 +4,7 @@ description: Searches academic papers on arXiv, analyzes research content, build
 license: MIT
 metadata:
   author: Ray0907
-  version: "0.1.0"
+  version: "0.2.0"
 ---
 
 # arXiv Research Skill
