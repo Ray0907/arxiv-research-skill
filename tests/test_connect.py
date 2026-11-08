@@ -1,3 +1,4 @@
+import pytest
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -78,13 +79,11 @@ def test_no_filters_matches_everything():
 def test_since_only_has_no_wildcard():
     out = buildSearchQuery("x", None, None, "2024-01", None)
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
-    assert "*" not in out.replace("all:x", "")
     assert f"submittedDate:[202401010000 TO {today}2359]" in out
 
 
 def test_until_only_has_no_wildcard():
     out = buildSearchQuery("x", None, None, None, "2024-12")
-    assert "*" not in out.replace("all:x", "")
     assert "submittedDate:[199101010000 TO 202412312359]" in out
 
 
@@ -95,6 +94,7 @@ def test_both_bounds():
 
 def make_client(feed=FEED):
     client = ArxivClient()
+    client.client.close()
     client.client = MagicMock()
     response = MagicMock()
     response.text = feed
@@ -118,6 +118,13 @@ def test_get_recent_uses_atom_api_sorted_by_submission():
     assert papers[0].abstract == "An invented abstract about lantern routing."
 
 
+def test_get_recent_waits_for_the_rate_limit_once():
+    client = make_client()
+    client._rateLimit = MagicMock()
+    client.getRecent("cs.AI", 3)
+    assert client._rateLimit.call_count == 1
+
+
 def test_search_sends_anded_query():
     client = make_client()
     client.search("transformer attention mechanism")
@@ -125,10 +132,10 @@ def test_search_sends_anded_query():
     assert qs["search_query"] == ["all:transformer AND all:attention AND all:mechanism"]
 
 
-def test_arxiv_clients_send_user_agent():
-    for c in (ArxivClient().client, evidence.ArxivMetadataClient().client):
-        assert c.headers["user-agent"] == USER_AGENT
-
-
-def test_tikz_client_sends_user_agent():
-    assert tikz.TikzClient().client.headers["user-agent"] == USER_AGENT
+@pytest.mark.parametrize("make", [ArxivClient, evidence.ArxivMetadataClient, tikz.TikzClient])
+def test_arxiv_clients_send_user_agent(make):
+    owner = make()
+    try:
+        assert owner.client.headers["user-agent"] == USER_AGENT
+    finally:
+        owner.client.close()

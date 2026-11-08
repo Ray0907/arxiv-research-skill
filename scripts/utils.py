@@ -14,6 +14,8 @@ ARXIV_RATE_LIMIT_DELAY = 3.0  # arXiv asks for 1 request per 3 seconds
 SEMANTIC_SCHOLAR_RATE_LIMIT_DELAY = 0.5  # 100 requests per 5 minutes = ~0.5s between requests
 ARXIV_USER_AGENT = "arxiv-research-skill (+https://github.com/Ray0907/arxiv-research-skill)"
 TIMEOUT = 30.0
+ARXIV_BASE = "https://arxiv.org"
+ARXIV_EXPORT = "https://export.arxiv.org"
 
 
 # New-style: YYMM.NNNNN or YYMM.NNNNNNN, optional version suffix (e.g. 2301.00001v2)

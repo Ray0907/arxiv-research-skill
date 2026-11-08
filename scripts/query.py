@@ -35,7 +35,7 @@ def parseDateToArxiv(date_str: str, is_start: bool = True) -> str:
     parts = date_str.split("-")
     year = parts[0]
     month = parts[1] if len(parts) > 1 else ("01" if is_start else "12")
-    day = parts[2] if len(parts) > 2 else ("01" if is_start else "31")
+    day = parts[2] if len(parts) > 2 else "01"
 
     if not is_start and len(parts) <= 2:
         day = f"{calendar.monthrange(int(year), int(month))[1]:02d}"

@@ -38,7 +38,7 @@ LEGACY_FEED = """<?xml version="1.0" encoding="UTF-8"?>
 
 
 def test_parse_keeps_legacy_ids_and_strips_versions():
-    papers = ArxivClient()._parseApiResults(LEGACY_FEED)
+    papers = ArxivClient._parseApiResults(LEGACY_FEED)
     assert [p.id_arxiv for p in papers] == ["2601.00001", "hep-th/9901001", "math.GT/0309136"]
     assert papers[1].url_abstract.endswith("/abs/hep-th/9901001")
 

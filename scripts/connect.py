@@ -13,6 +13,7 @@ import time
 import urllib.parse
 from dataclasses import asdict
 from typing import Optional
+from xml.etree import ElementTree
 
 try:
     import httpx
@@ -22,15 +23,13 @@ except ImportError:
 
 from formatting import formatPapers, formatReferences, formatCitations, formatCoauthors
 from scholar import SemanticScholarClient
-from utils import extractPaperId, ARXIV_RATE_LIMIT_DELAY, ARXIV_USER_AGENT, TIMEOUT
+from utils import extractPaperId, ARXIV_BASE, ARXIV_EXPORT, ARXIV_RATE_LIMIT_DELAY, ARXIV_USER_AGENT, TIMEOUT
 from cache import PaperCache, CachedPaper
 from models import Paper
 from query import buildSearchQuery
 
 
 # Configuration
-ARXIV_BASE = "https://arxiv.org"
-ARXIV_EXPORT = "https://export.arxiv.org"
 JINA_READER = "https://r.jina.ai"
 
 
@@ -99,10 +98,9 @@ class ArxivClient:
 
         return self._parseApiResults(response.text)
 
-    def _parseApiResults(self, xml_content: str) -> list[Paper]:
+    @staticmethod
+    def _parseApiResults(xml_content: str) -> list[Paper]:
         """Parse arXiv API Atom feed results."""
-        from xml.etree import ElementTree
-
         ns = {
             "atom": "http://www.w3.org/2005/Atom",
             "arxiv": "http://arxiv.org/schemas/atom"
@@ -215,20 +213,7 @@ class ArxivClient:
 
     def getRecent(self, category: str = "cs.AI", count: int = 10) -> list[Paper]:
         """Get recent papers from a category."""
-        self._rateLimit()
-
-        count = min(count, 50)
-        url = (
-            f"{ARXIV_EXPORT}/api/query?"
-            f"search_query={urllib.parse.quote(f'cat:{category}')}"
-            f"&start=0&max_results={count}"
-            "&sortBy=submittedDate&sortOrder=descending"
-        )
-
-        response = self.client.get(url)
-        response.raise_for_status()
-
-        return self._parseApiResults(response.text)
+        return self.search("", category=category, sort_by="date_desc", limit=min(count, 50))
 
     def getContent(self, id_or_url: str) -> str:
         """Get full text content using Jina Reader."""

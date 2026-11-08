@@ -20,11 +20,10 @@ except ImportError:
 from tikz_extract import processArchive
 from tikz_format import formatFigures
 from tikz_models import TikzFigure
-from utils import extractPaperId, ARXIV_RATE_LIMIT_DELAY, ARXIV_USER_AGENT
+from utils import extractPaperId, ARXIV_BASE, ARXIV_RATE_LIMIT_DELAY, ARXIV_USER_AGENT
 
 
 # Configuration
-ARXIV_BASE = "https://arxiv.org"
 TIMEOUT = 60.0
 
 

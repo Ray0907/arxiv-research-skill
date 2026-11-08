@@ -22,11 +22,9 @@ except ImportError:
     print("Error: httpx required. Install with: pip install httpx")
     sys.exit(1)
 
-from utils import extractPaperId, ARXIV_RATE_LIMIT_DELAY, ARXIV_USER_AGENT
+from utils import extractPaperId, ARXIV_EXPORT, ARXIV_RATE_LIMIT_DELAY, ARXIV_USER_AGENT, TIMEOUT
 
 
-ARXIV_EXPORT = "https://export.arxiv.org"
-TIMEOUT = 30.0
 
 
 @dataclass
