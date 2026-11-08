@@ -1,5 +1,6 @@
 """Pure arXiv search-query construction. No network."""
 
+import calendar
 import re
 from datetime import datetime, timezone
 from typing import Optional
@@ -36,15 +37,8 @@ def parseDateToArxiv(date_str: str, is_start: bool = True) -> str:
     month = parts[1] if len(parts) > 1 else ("01" if is_start else "12")
     day = parts[2] if len(parts) > 2 else ("01" if is_start else "31")
 
-    # Clamp day to valid range for the month
     if not is_start and len(parts) <= 2:
-        # Last day of month approximation
-        if month in ["04", "06", "09", "11"]:
-            day = "30"
-        elif month == "02":
-            day = "28"
-        else:
-            day = "31"
+        day = f"{calendar.monthrange(int(year), int(month))[1]:02d}"
 
     time_part = "0000" if is_start else "2359"
     return f"{year}{month}{day}{time_part}"

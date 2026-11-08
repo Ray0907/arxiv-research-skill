@@ -8,7 +8,6 @@ Integrates arXiv search with Semantic Scholar for citation data.
 
 import argparse
 import json
-import re
 import sys
 import time
 import urllib.parse
@@ -122,11 +121,9 @@ class ArxivClient:
                 if id_elem is None:
                     continue
 
-                id_text = id_elem.text or ""
-                id_match = re.search(r"abs/(\d+\.\d+)", id_text)
-                if not id_match:
+                id_arxiv = extractPaperId(id_elem.text or "")
+                if not id_arxiv:
                     continue
-                id_arxiv = id_match.group(1)
 
                 # Extract title
                 title_elem = entry.find("atom:title", ns)

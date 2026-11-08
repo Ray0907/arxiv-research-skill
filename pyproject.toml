@@ -6,9 +6,3 @@ requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.28.1",
 ]
-
-[project.scripts]
-arxiv-connect = "connect:main"
-arxiv-understand = "understand:main"
-arxiv-evidence = "evidence:main"
-arxiv-tikz = "tikz:main"
