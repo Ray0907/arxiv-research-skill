@@ -104,11 +104,9 @@ class ArxivMetadataClient:
             if id_elem is None:
                 continue
 
-            id_text = id_elem.text or ""
-            id_match = re.search(r"abs/(\d+\.\d+)", id_text)
-            if not id_match:
+            arxiv_id = extractPaperId(id_elem.text or "")
+            if not arxiv_id:
                 continue
-            arxiv_id = id_match.group(1)
 
             # Extract title
             title_elem = entry.find("atom:title", ns)

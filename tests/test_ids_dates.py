@@ -5,8 +5,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
+import evidence
 from connect import ArxivClient
-from query import parseDateToArxiv
+from query import buildSearchQuery, parseDateToArxiv
 
 LEGACY_FEED = """<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
@@ -60,3 +61,50 @@ def test_until_month_ends_on_its_real_last_day(date, last_day):
 
 def test_explicit_day_is_not_clamped():
     assert parseDateToArxiv("2024-02-15", is_start=False) == "202402152359"
+
+
+@pytest.mark.parametrize("bad", ["2023-1", "2023-13-05", "2023-02-31", "2023-00", "2023-05-00", "yesterday", "2024-1-5", "", "20240105"])
+def test_invalid_dates_raise_instead_of_building_a_bad_range(bad):
+    with pytest.raises(ValueError, match="Invalid date"):
+        parseDateToArxiv(bad, is_start=True)
+
+
+@pytest.mark.parametrize(
+    "date, is_start, expected",
+    [
+        ("2024", True, "202401010000"),
+        ("2024", False, "202412312359"),
+        ("2024-03", True, "202403010000"),
+        ("2024-03-07", False, "202403072359"),
+    ],
+)
+def test_accepted_date_forms(date, is_start, expected):
+    assert parseDateToArxiv(date, is_start=is_start) == expected
+
+
+def test_since_after_until_raises():
+    with pytest.raises(ValueError, match="since"):
+        buildSearchQuery("x", None, None, "2024-06-01", "2023-01-01")
+
+
+def test_since_equal_to_until_is_allowed():
+    assert "submittedDate:[202406010000 TO 202406012359]" in buildSearchQuery("x", None, None, "2024-06-01", "2024-06-01")
+
+
+@pytest.fixture
+def metadata_client():
+    client = evidence.ArxivMetadataClient()
+    yield client
+    client.close()
+
+
+def test_evidence_parser_keeps_legacy_ids(metadata_client):
+    papers = metadata_client._parseAtomFeedMultiple(LEGACY_FEED)
+    assert [p.id_arxiv for p in papers] == ["2601.00001", "hep-th/9901001", "math.GT/0309136"]
+
+
+@pytest.mark.parametrize("fmt", ["bibtex", "apa", "ieee", "acm", "chicago", "ris"])
+def test_every_citation_format_handles_a_legacy_id(metadata_client, fmt):
+    legacy = metadata_client._parseAtomFeedMultiple(LEGACY_FEED)[1]
+    out = evidence.formatCitation(legacy, fmt)
+    assert "Invented Legacy Paper" in out

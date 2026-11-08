@@ -25,23 +25,34 @@ def buildTerm(prefix: str, value: str, phrase: bool = False) -> str:
     return " AND ".join(f"{prefix}:{w}" for w in words)
 
 
+_DATE_RE = re.compile(r"^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$")
+
+
 def parseDateToArxiv(date_str: str, is_start: bool = True) -> str:
-    """Convert date string to arXiv API format (YYYYMMDDTTTT).
+    """Convert YYYY, YYYY-MM or YYYY-MM-DD to the arXiv API format (YYYYMMDDTTTT).
 
     Args:
-        date_str: Date in YYYY-MM or YYYY-MM-DD format
-        is_start: If True, use start of period; if False, use end of period
+        is_start: If True, use the start of the period; if False, its end.
+
+    Raises:
+        ValueError: if the text is not one of those forms or is not a real date.
     """
-    parts = date_str.split("-")
-    year = parts[0]
-    month = parts[1] if len(parts) > 1 else ("01" if is_start else "12")
-    day = parts[2] if len(parts) > 2 else "01"
+    match = _DATE_RE.match(date_str.strip())
+    if not match:
+        raise ValueError(f"Invalid date '{date_str}'. Use YYYY, YYYY-MM or YYYY-MM-DD.")
+    year, month, day = (int(g) if g else None for g in match.groups())
 
-    if not is_start and len(parts) <= 2:
-        day = f"{calendar.monthrange(int(year), int(month))[1]:02d}"
+    if month is None:
+        month = 1 if is_start else 12
+    if not 1 <= month <= 12:
+        raise ValueError(f"Invalid date '{date_str}': month must be 01-12.")
+    last_day = calendar.monthrange(year, month)[1]
+    if day is None:
+        day = 1 if is_start else last_day
+    if not 1 <= day <= last_day:
+        raise ValueError(f"Invalid date '{date_str}': {year:04d}-{month:02d} has {last_day} days.")
 
-    time_part = "0000" if is_start else "2359"
-    return f"{year}{month}{day}{time_part}"
+    return f"{year:04d}{month:02d}{day:02d}{'0000' if is_start else '2359'}"
 
 
 def buildSearchQuery(
@@ -68,6 +79,8 @@ def buildSearchQuery(
             if until
             else datetime.now(timezone.utc).strftime("%Y%m%d2359")
         )
+        if date_from > date_to:
+            raise ValueError(f"since ({since}) must not be after until ({until}).")
         parts.append(f"submittedDate:[{date_from} TO {date_to}]")
 
     return " AND ".join(p for p in parts if p) or "all:*"

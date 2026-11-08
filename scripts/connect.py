@@ -434,6 +434,9 @@ Examples:
             data = semantic.getCoauthors(args.author, limit=100)
             print(formatCoauthors(data, args.format, limit=args.limit))
 
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
     finally:
         arxiv.close()
         semantic.close()
