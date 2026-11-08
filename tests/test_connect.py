@@ -132,6 +132,5 @@ def test_arxiv_clients_send_user_agent():
         assert c.headers["user-agent"] == USER_AGENT
 
 
-@pytest.mark.xfail(strict=True, reason="tikz.py is over the 20,000 byte commit limit; split it, then set the header")
 def test_tikz_client_sends_user_agent():
     assert tikz.TikzClient().client.headers["user-agent"] == USER_AGENT
